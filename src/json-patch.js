@@ -88,6 +88,9 @@ var jsonpatch;
             return obj.push && typeof obj.length === 'number';
         };
     }
+    function isNumber(n) {
+      return !isNaN(parseFloat(n)) && isFinite(n);
+    }
     /// Apply a json-patch operation on an object tree
     function apply(tree, patches, listen) {
         var result = false, p = 0, plen = patches.length, patch;
@@ -97,11 +100,28 @@ var jsonpatch;
             var keys = patch.path.split('/');
             var obj = tree;
             var t = 1;//skip empty element - http://jsperf.com/to-shift-or-not-to-shift
-            
+
             var len = keys.length;
             while(true) {
+                var key = keys[t];
+
                 if(_isArray(obj)) {
-                    var index = parseInt(keys[t], 10);
+                    var index, m;
+
+                    if (isNumber(key)) {
+                        index = parseInt(keys[t], 10);
+                    }
+                    else if (m = key.match(/{(\w+):(\d+)}/)) {
+                        var k = m[1], v = m[2];
+
+                        for (var i = 0; i < obj.length; i++) {
+                            if (obj[i][k] == v) {
+                                index = i;
+                                break;
+                            }
+                        };
+                    }
+
                     t++;
                     if(t >= len) {
                         result = arrOps[patch.op].call(patch, obj, index, tree)// Apply patch
@@ -110,11 +130,10 @@ var jsonpatch;
                     }
                     obj = obj[index];
                 } else {
-                    var key = keys[t];
                     if(key.indexOf('~') != -1) {
                         key = key.replace('~1', '/').replace('~0', '~');
                     }// escape chars
-                    
+
                     t++;
                     if(t >= len) {
                         result = objOps[patch.op].call(patch, obj, key, tree)// Apply patch
